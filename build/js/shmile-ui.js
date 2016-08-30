@@ -375,12 +375,23 @@ var PhotoView = Backbone.View.extend({
     this.all.push(img);
 
     // Draw the PNG logo overlay.
-    var o = this.canvas.image(
-        '/images/overlay.png',
+    if (Math.random() >= 0.5) {
+      console.log("overlay1.png");
+      var o = this.canvas.image(
+        '/images/overlay1.png',
         this.compositeOrigin.x,
         this.compositeOrigin.y,
         this.compositeDim.w,
         this.compositeDim.h);
+    } else {
+      console.log("overlay2.png");
+      var o = this.canvas.image(
+        '/images/overlay2.png',
+        this.compositeOrigin.x,
+        this.compositeOrigin.y,
+        this.compositeDim.w,
+        this.compositeDim.h);
+    }
     this.all.push(o);
     this.overlayImage = o;
 
