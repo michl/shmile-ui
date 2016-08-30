@@ -8,10 +8,13 @@ $(window).ready(function() {
 
   window.p = new PhotoView(window.Config, appState);
   bv = new ButtonView();
+  pv = new PrintView();
 
-  var ssm = new ShmileStateMachine(window.p, socketProxy, appState, window.Config, bv)
+  var ssm = new ShmileStateMachine(window.p, socketProxy, appState, window.Config, bv, pv)
 
   bv.fsm = ssm.fsm
+  pv.fsm = ssm.fsm
+  pv.socket = socketProxy
 
   var layer = new SocketLayer(window.io, socketProxy)
   layer.init();
@@ -20,5 +23,6 @@ $(window).ready(function() {
   window.socketProxy = socketProxy
 
   bv.render();
+  pv.render();
   p.render();
 });

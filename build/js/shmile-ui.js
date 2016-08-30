@@ -96,12 +96,13 @@ AppState.prototype.reset = function() {
  * @param [AppState] appState Global initialized state
  * @param [Config] config     The configuration options passed to the app
  */
-var ShmileStateMachine = function(photoView, socket, appState, config, buttonView) {
+var ShmileStateMachine = function(photoView, socket, appState, config, buttonView, printView) {
   this.photoView = photoView;
   this.socket = socket;
   this.appState = appState;
   this.config = config;
-  this.buttonView = buttonView
+  this.buttonView = buttonView;
+  this.printView = printView;
 
   var self = this;
 
@@ -114,6 +115,8 @@ var ShmileStateMachine = function(photoView, socket, appState, config, buttonVie
       { name: 'photo_updated', from: 'review_photo', to: 'next_photo' },
       { name: 'continue_partial_set', from: 'next_photo', to: 'waiting_for_photo' },
       { name: 'finish_set', from: 'next_photo', to: 'review_composited' },
+      { name: 'print_enabled', from: 'review_composited', to: 'print_view'},
+      { name: 'print_decided', from: 'print_view', to: 'ready'},
       { name: 'next_set', from: 'review_composited', to: 'ready'}
     ],
     callbacks: {
@@ -158,13 +161,27 @@ var ShmileStateMachine = function(photoView, socket, appState, config, buttonVie
         }
       },
       onenterreview_composited: function(e, f, t) {
-        self.socket.emit('composite');
         self.photoView.showOverlay(true);
         setTimeout(function() {
-          self.fsm.next_set()
+          console.log("Emiting printing_state");
+          self.socket.emit('printing_state');
         }, self.config.next_delay);
       },
-      onleavereview_composited: function(e, f, t) {
+      onprint_enabled: function(e, f, t) {
+        console.log("print_enabled event");
+        self.printView.fadeIn();
+      },
+      onprint_decided: function(e, f, t) {
+        console.log("print_decided event");
+        // Clean up
+        self.printView.fadeOut();
+        self.photoView.animate('out');
+        self.photoView.modalMessage('Nice!', self.config.nice_delay, 200, function() {
+          self.photoView.slideInNext();
+        });
+      },
+      onnext_set: function(e, f, t) {
+        self.socket.emit('composite');
         // Clean up
         self.photoView.animate('out');
         self.photoView.modalMessage('Nice!', self.config.nice_delay, 200, function() {
@@ -262,6 +279,17 @@ SocketLayer.prototype.register = function(fsm) {
     console.log('photo_saved evt: ' + data.filename);
     self.fsm.photo_saved(data);
   });
+
+  this.proxy.on('printing_enabled', function(data) {
+    console.log('printing_enabled');
+    self.fsm.print_enabled(data);
+  });
+
+  this.proxy.on('printing_disabled', function(data) {
+    console.log('printing_disabled');
+    self.fsm.next_set(data);
+  });
+
 }
 
 var PhotoView = Backbone.View.extend({
@@ -627,6 +655,61 @@ ButtonView.prototype.fadeIn = function() {
   this.startButton.fadeIn();
 }
 
+var PrintView = function(fsm) {
+  this.fsm = fsm;
+}
+
+PrintView.prototype.render = function() {
+  var self = this;
+  console.log("printView.render");
+  // init code
+  this.yesButton = $('button#print-button-yes');
+  this.noButton = $('button#print-button-no');
+  var buttonYesX = (Config.window_width - this.yesButton.outerWidth())/2;
+  var buttonNoX = (Config.window_width - this.noButton.outerWidth())/2;
+  var buttonYesY = (Config.window_height / 2 - this.yesButton.outerHeight())/2;
+  var buttonNoY = (Config.window_height / 2 - this.noButton.outerHeight())/2 + Config.window_height / 2;
+
+  this.yesButton.hide();
+  this.noButton.hide();
+
+  // Position the start button in the center
+  this.yesButton.css({'top': buttonYesY, 'left': buttonYesX});
+  this.noButton.css({'top': buttonNoY, 'left': buttonNoX});
+
+  var buttonTriggerEvt = Config.is_mobile ? "touchend" : "click";
+
+  this.yesButton.bind(buttonTriggerEvt, function(e) {
+    $(document).trigger('yes_button_pressed');
+  });
+
+  this.noButton.bind(buttonTriggerEvt, function(e) {
+    $(document).trigger('no_button_pressed');
+  });
+
+  $(document).bind('yes_button_pressed', function() {
+    console.log('yes_button_pressed evt');
+    self.fsm.print_decided();
+    self.socket.emit('composite_print');
+  });
+
+  $(document).bind('no_button_pressed', function() {
+    console.log('no_button_pressed evt');
+    self.fsm.print_decided();
+    self.socket.emit('composite');
+  });
+}
+PrintView.prototype.fadeIn = function() {
+  console.log("printView.fadeIn");
+  this.yesButton.fadeIn();
+  this.noButton.fadeIn();
+}
+PrintView.prototype.fadeOut = function() {
+  console.log("printView.fadeOut");
+  this.yesButton.fadeOut();
+  this.noButton.fadeOut();
+}
+
 
 // Everything required to set up the app.
 $(window).ready(function() {
@@ -637,10 +720,13 @@ $(window).ready(function() {
 
   window.p = new PhotoView(window.Config, appState);
   bv = new ButtonView();
+  pv = new PrintView();
 
-  var ssm = new ShmileStateMachine(window.p, socketProxy, appState, window.Config, bv)
+  var ssm = new ShmileStateMachine(window.p, socketProxy, appState, window.Config, bv, pv)
 
   bv.fsm = ssm.fsm
+  pv.fsm = ssm.fsm
+  pv.socket = socketProxy
 
   var layer = new SocketLayer(window.io, socketProxy)
   layer.init();
@@ -649,5 +735,6 @@ $(window).ready(function() {
   window.socketProxy = socketProxy
 
   bv.render();
+  pv.render();
   p.render();
 });

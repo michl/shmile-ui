@@ -47,4 +47,15 @@ SocketLayer.prototype.register = function(fsm) {
     console.log('photo_saved evt: ' + data.filename);
     self.fsm.photo_saved(data);
   });
+
+  this.proxy.on('printing_enabled', function(data) {
+    console.log('printing_enabled');
+    self.fsm.print_enabled(data);
+  });
+
+  this.proxy.on('printing_disabled', function(data) {
+    console.log('printing_disabled');
+    self.fsm.next_set(data);
+  });
+
 }

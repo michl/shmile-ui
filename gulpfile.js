@@ -16,6 +16,7 @@ var paths = {
     'ui/socketLayer.js',
     'ui/photoView.js',
     'ui/buttonView.js',
+    'ui/printView.js',
     'ui/shmile.js'
   ],
   styles: [

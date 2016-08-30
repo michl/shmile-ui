@@ -20,12 +20,13 @@
  * @param [AppState] appState Global initialized state
  * @param [Config] config     The configuration options passed to the app
  */
-var ShmileStateMachine = function(photoView, socket, appState, config, buttonView) {
+var ShmileStateMachine = function(photoView, socket, appState, config, buttonView, printView) {
   this.photoView = photoView;
   this.socket = socket;
   this.appState = appState;
   this.config = config;
-  this.buttonView = buttonView
+  this.buttonView = buttonView;
+  this.printView = printView;
 
   var self = this;
 
@@ -38,6 +39,8 @@ var ShmileStateMachine = function(photoView, socket, appState, config, buttonVie
       { name: 'photo_updated', from: 'review_photo', to: 'next_photo' },
       { name: 'continue_partial_set', from: 'next_photo', to: 'waiting_for_photo' },
       { name: 'finish_set', from: 'next_photo', to: 'review_composited' },
+      { name: 'print_enabled', from: 'review_composited', to: 'print_view'},
+      { name: 'print_decided', from: 'print_view', to: 'ready'},
       { name: 'next_set', from: 'review_composited', to: 'ready'}
     ],
     callbacks: {
@@ -82,13 +85,27 @@ var ShmileStateMachine = function(photoView, socket, appState, config, buttonVie
         }
       },
       onenterreview_composited: function(e, f, t) {
-        self.socket.emit('composite');
         self.photoView.showOverlay(true);
         setTimeout(function() {
-          self.fsm.next_set()
+          console.log("Emiting printing_state");
+          self.socket.emit('printing_state');
         }, self.config.next_delay);
       },
-      onleavereview_composited: function(e, f, t) {
+      onprint_enabled: function(e, f, t) {
+        console.log("print_enabled event");
+        self.printView.fadeIn();
+      },
+      onprint_decided: function(e, f, t) {
+        console.log("print_decided event");
+        // Clean up
+        self.printView.fadeOut();
+        self.photoView.animate('out');
+        self.photoView.modalMessage('Nice!', self.config.nice_delay, 200, function() {
+          self.photoView.slideInNext();
+        });
+      },
+      onnext_set: function(e, f, t) {
+        self.socket.emit('composite');
         // Clean up
         self.photoView.animate('out');
         self.photoView.modalMessage('Nice!', self.config.nice_delay, 200, function() {
